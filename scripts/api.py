@@ -8,9 +8,7 @@ import cv2
 classes = ["coral", "lego", "floor", "sand"]
 DEFAULT_PIXEL_LOCATIONS = [(110, 390), (110, 250), (320, 250), (320, 390), (530, 250), (530,390), (80,80)]
 
-#global model
-model = load_model('grand_challenge_trained_new.h5')
-#    global graph
+model = load_model('gc_ros_eq_80.h5')
 graph = K.backend.get_session().graph
 
 # Given a path to an image, returns the classification at some points in space
@@ -18,50 +16,36 @@ graph = K.backend.get_session().graph
 #       img - np ndarray corresponding to RGB image
 #       points (OPTIONAL) - list of (x,y) tuples to classify, from the bottom left corner
 #                           Defaults to six points in the bottom half of the image
-#       img_display (OPTIONAL) - True if pictures should be printed, defaults to False
+#       img_save (OPTIONAL) - True if pictures should be saved, defaults to False
 # Returns: Tuple with (x position, y position, classification probability array)
 #           Prob array is [coral, lego, floor, sand]
 def classify_image(img, points=DEFAULT_PIXEL_LOCATIONS, img_save=False):
 
     results = []
     
-    #img = img.convert("RGBA")
     patch_size = (80,80)
     for point in points:
         x, y = point
-        #y = 480 - y
         box = (int(x - patch_size[0]/2), int(y - patch_size[1]/2), int(x + patch_size[0]/2), int(y + patch_size[1]/2))
 
-        cropped = img.crop(box).resize((200,200))
-        Rvals = np.array(cropped.getdata(band=0)).reshape((200,200))
-        Gvals = np.array(cropped.getdata(band=1)).reshape((200,200))
-        Bvals = np.array(cropped.getdata(band=2)).reshape((200,200))
-        hues = np.array(cropped.convert("HSV").getdata(band=0)).reshape((200,200))
+        cropped = img.crop(box)
+        Rvals = np.array(cropped.getdata(band=0)).reshape((80,80))
+        Gvals = np.array(cropped.getdata(band=1)).reshape((80,80))
+        Bvals = np.array(cropped.getdata(band=2)).reshape((80,80))
+        hues = np.array(cropped.convert("HSV").getdata(band=0)).reshape((80,80))
 
         # Normalize
         Rvals = Rvals / 255.0
         Gvals = Gvals / 255.0
         Bvals = Bvals / 255.0
         hues = hues / 360.0
-        print("Rvals")
-        print(Rvals)
-        print("Gvals")
-        print(Gvals)
-        print("Bvals")
-        print(Bvals)
-        print(hues)
-
+        
         RGBHimage = np.stack((Rvals, Gvals, Bvals, hues), axis=-1)
         expanded = np.expand_dims(RGBHimage, axis=0)
         probs = None
         with graph.as_default():
             probs = model.predict(expanded)[0]
-        # result = -1
-        # if probs[3] > 0.17:
-        #     result = 3
-        # else:
-        #     result = model.predict_classes(expanded)[0]
-
+        
         result = None
         with graph.as_default():
             result = model.predict_classes(expanded)[0]
@@ -79,12 +63,9 @@ def classify_image(img, points=DEFAULT_PIXEL_LOCATIONS, img_save=False):
             img.paste(overlay, box=(box[0], box[1]))
 
         x, y = getXYFromPixel(point)
-        #final_result = (x, y, probs)
-        #results.append(final_result)
         results.append(x)
         results.append(y)
         results.append(result)
-        print(result)
         results.extend(probs.tolist())   
 
     if img_save:
