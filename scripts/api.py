@@ -8,7 +8,8 @@ import cv2
 classes = ["coral", "lego", "floor", "sand"]
 DEFAULT_PIXEL_LOCATIONS = [(110, 390), (110, 250), (320, 250), (320, 390), (530, 250), (530,390), (80,80)]
 
-model = load_model('gc_ros_eq_80.h5')
+model = load_model('gc_more_random.h5')
+print('new model loaded')
 graph = K.backend.get_session().graph
 
 # Given a path to an image, returns the classification at some points in space
@@ -29,10 +30,11 @@ def classify_image(img, points=DEFAULT_PIXEL_LOCATIONS, img_save=False):
         box = (int(x - patch_size[0]/2), int(y - patch_size[1]/2), int(x + patch_size[0]/2), int(y + patch_size[1]/2))
 
         cropped = img.crop(box)
-        Rvals = np.array(cropped.getdata(band=0)).reshape((80,80))
-        Gvals = np.array(cropped.getdata(band=1)).reshape((80,80))
-        Bvals = np.array(cropped.getdata(band=2)).reshape((80,80))
-        hues = np.array(cropped.convert("HSV").getdata(band=0)).reshape((80,80))
+        cropped = cropped.resize((200,200))
+        Rvals = np.array(cropped.getdata(band=0)).reshape((200,200))
+        Gvals = np.array(cropped.getdata(band=1)).reshape((200,200))
+        Bvals = np.array(cropped.getdata(band=2)).reshape((200,200))
+        hues = np.array(cropped.convert("HSV").getdata(band=0)).reshape((200,200))
 
         # Normalize
         Rvals = Rvals / 255.0

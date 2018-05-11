@@ -2,6 +2,11 @@
 
 This repo contains the work of the Image Classification team for the 6.834 Grand Challenge. We have specifically created a ROS package that follows a client-server model to classify parts of an image taken by a camera node via a convolutional neural net (CNN).
 
+<div align="center">
+  <img height="150px" src="overlay_1.png"><br />
+  <em>Red: coral. Blue: floor. Green: lego.</em>
+</div>
+
 ## Getting Started
 
 The rest of this section will go over parts of the repo and how to build the ROS package.
