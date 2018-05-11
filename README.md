@@ -22,11 +22,13 @@ Our code assumes usage of ROS kinetic, Python 2, and Keras (with TensorFlow back
 
 First, clone the repo and place the contents in your `catkin` workspace. Then, run `catkin_make` to prepare the package to be used. 
 
+Additionally, download a model from [this Drive folder](https://drive.google.com/drive/folders/1hmrUoPmDxhI37l57LdAsowS8hapfM1wN?usp=sharing). We recommend starting with `gc_more_random.h5`, and change the path to the model in `scripts/api.py`
+
 ## Usage
 
 ###Initialization
 
-After those two setup steps, run each of the following commands in different processes or terminal windows:
+After the setup steps, run each of the following commands in different processes or terminal windows:
 
 Run `roscore` on remote computer (running ROS):
 
@@ -45,6 +47,7 @@ Run server on remote computer (running ROS):
 ```
 rosrun image_class ros_server.py
 ```
+Note: for this step, you will need to be in the `scripts` directory for the command to work (otherwise you will need to change the path to the network used in `api.py`)
 
 Run client on remote computer (running ROS):
 
