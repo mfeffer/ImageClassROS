@@ -1,0 +1,12 @@
+sensor_msgs/CompressedImage image     # Image to classify
+---
+#uint8 most_probable         # 0, 1, 2, 3 from CONSTANTS
+#float64 uncertainty         # Some measure of uncertainty
+#float64 lego_prob           # 0-1 probablity of lego in image
+#float64 coral_prob          # 0-1 probablity of coral in image
+#float64 seaweed_prob        # 0-1 probablity of seaweed in image
+#float64 sand_prob           # 0-1 probablity of sand in image
+
+float64[] data                # array of floats where each set of 7 floats corresponds to x, y, most likely class, and 4 class probabilities 
+uint8     row_length          # was going to be a float for figuring out 2D arrangement of tuples based on image, but probably will remain unused
+uint8     entry_length        # equals 7 (number of entries in each "tuple")
