@@ -18,13 +18,13 @@ epochs = 20
 image_size = (200, 200, 4) #width, height, channels (r,g,b,hue,entropy?)
 
 # READ IN DATA
-root = "training/"
+root = "training_new/"
 data = {"lego": [], "floor": [], "coral": [], "sand": [], "unknown": []}
 for sub, dirs, files in os.walk(root):
     for dir in dirs:
         key = dir
         for subdir, dirs, files in os.walk(root + dir):
-            for file in files[0:min(331, len(files))]:
+            for file in files[0:min(350, len(files))]:
                 if file.endswith(".png"):
                     img = Image.open(subdir + "/" + file)
                     Rvals = np.array(img.getdata(band=0)).reshape((200,200))
@@ -100,8 +100,8 @@ model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accur
 #   If needed, define preprocessing_function() from https://keras.io/preprocessing/image/
 
 es = EarlyStopping(patience=2, min_delta=0.001)
-checkpointer = ModelCheckpoint(filepath="gc_best.h5", verbose=1, save_best_only=True)
-datagen = ImageDataGenerator(rotation_range = 90, featurewise_center=True)
+checkpointer = ModelCheckpoint(filepath="gc_more_random.h5", verbose=1, save_best_only=True)
+datagen = ImageDataGenerator(rotation_range = 180, horizontal_flip=True, vertical_flip=True)
 flowed = datagen.flow(np.array(x_train), np.array(y_train), batch_size=batch_size)
 model.fit_generator(flowed, steps_per_epoch=len(x_train) / batch_size, epochs=epochs, validation_data=(np.asarray(x_test), np.asarray(y_test)), callbacks=[es, checkpointer])
 
