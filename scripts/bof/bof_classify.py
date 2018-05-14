@@ -16,32 +16,19 @@ k = featureClassifier.n_clusters # number of vocab features
 added_limit = 18
 image_labels = ["coral","sand","floor","lego"]
 
-#TODO
-#### slice image ##
-##    xMod = range(int(img.width / size))
-##    yMod = range(int(img.height / size))
-##    for x in xMod:
-##        for y in yMod:
-##            cropped = img.crop((x*size, y*size, x*size+size, y*size+size)).resize((200,200))
-##            Rvals = np.array(cropped.getdata(band=0)).reshape((200,200))
-##            Gvals = np.array(cropped.getdata(band=1)).reshape((200,200))
-##            Bvals = np.array(cropped.getdata(band=2)).reshape((200,200))
-##            hues = np.array(cropped.convert("HSV").getdata(band=0)).reshape((200,200))
-##
-##            # Normalize
-##            Rvals = Rvals / 255.0
-##            Gvals = Gvals / 255.0
-##            Bvals = Bvals / 255.0
-##            hues = hues / 360.0
-##
-##            RGBHimage = np.stack((Rvals, Gvals, Bvals, hues), axis=-1)
-#### save the 48 split picture as png into a directory called "ToClassify"
-##
-##
+PATCH_SIZE = (80,80)
+DEFAULT_PIXEL_LOCATIONS = [(110, 390), (110, 250), (320, 250), (320, 390), (530, 250), (530,390), (80,80)]
 
-pictureLabels = return_labels(["coral"], added_limit) ## change directory to "ToClassify" once above is done
-allTrainingFeatures = pictureLabels.reshape(-1, 128)
-
+def getPatches(img):
+    cropped = []
+    dx = PATCH_SIZE[0]/2
+    dy = PATCH_SIZE[1]/2
+    for y,x in DEFAULT_PIXEL_LOCATIONS:
+        cropped_img = img[x-dx:x+dx, y-dy:y+dy]
+        #cropped_img = cv2.resize(cropped_img, (200,200))
+        cropped.append(cropped_img)
+    return cropped
+    
 ## generate term vector for each training image ##
 def get_term_vector(picture):
     tv = [0 for i in range(k)]
@@ -51,7 +38,22 @@ def get_term_vector(picture):
         tv[int(result)] +=1
     return tv
 
-## get term vectors and classify ##
-classify = lambda p: image_labels[int(tvClassifier.predict([get_term_vector(p)]))]
-classifications = map(classify, pictureLabels)
-print classifications 
+## Given a small patch as an image, return a classification from ["coral", "sand", "floor", "lego"] ##
+def classify_patch(cropped_img):
+    features = get_image_descriptor(cropped_img)
+    tv = get_term_vector(features)
+    classification = int(tvClassifier.predict([tv]))
+    return image_labels[classification]
+
+def show(cp):
+    print classify_patch(cp)
+    cv2.imshow("patch",cp)
+    cv2.waitKey(0)
+
+def processImage(imgpath = "ros_images/ros_0.jpg"):
+    img = cv2.imread(imgpath)
+    patches = getPatches(img)
+    for patch in patches:
+        show(patch)
+
+

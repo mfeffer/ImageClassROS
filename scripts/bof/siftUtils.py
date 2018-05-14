@@ -209,31 +209,31 @@ def return_labels(directoryList, added_limit, patch_size=32):
 
     return sift_pictures[1:]
 
-def get_file_descriptors(name, added_limit=12, patch_size=32):
+def get_image_descriptor(image, added_limit=12, patch_size=32):
     range_size = added_limit*128
     count_limit = 100
     SD = SIFTDescriptor(patchSize = patch_size)
-    if name[-3:] == 'png' or name[-3:] == 'jpg':
-        image = cv2.imread(name)
-        
-        #transform it to black and white and get features
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        h, w = gray.shape
-        corners = cv2.goodFeaturesToTrack(gray,count_limit,0.01,10)
+       
+    #transform it to black and white and get features
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    corners = cv2.goodFeaturesToTrack(gray,count_limit,0.01,10)
 
-        corners = np.int0(corners)
-        image_sift_features = np.asarray([]) 
-        count, actually_added = 0, 0
+    corners = np.int0(corners)
+    image_sift_features = np.asarray([]) 
+    count, actually_added = 0, 0
         
-        #Here we want to get 31 images for our feature vector and then break out of the loop
-        while actually_added < added_limit and count < count_limit:
-            corner = corners[count][0]
-            
-            if patch_size/2 <= corner[1] <= h-patch_size/2 and patch_size/2 <= corner[0] <= w-patch_size/2:
-                patch = gray[corner[1]-int(patch_size/2):corner[1]+int(patch_size/2), corner[0]-int(patch_size/2):corner[0]+int(patch_size/2)]
-                sift = SD.describe(patch)
-                image_sift_features = np.append(image_sift_features, sift)
-                actually_added += 1
-            count += 1
-        return image_sift_features
+    #Here we want to get 31 images for our feature vector and then break out of the loop
+    while actually_added < added_limit and count < count_limit and count<len(corners):
+        corner = corners[count][0]
+        
+        if patch_size/2 <= corner[1] <= h-patch_size/2 and patch_size/2 <= corner[0] <= w-patch_size/2:
+            patch = gray[corner[1]-int(patch_size/2):corner[1]+int(patch_size/2), corner[0]-int(patch_size/2):corner[0]+int(patch_size/2)]
+            sift = SD.describe(patch)
+            image_sift_features = np.append(image_sift_features, sift)
+            actually_added += 1
+        count += 1
+    return image_sift_features
+
+
 
