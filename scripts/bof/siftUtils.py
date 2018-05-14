@@ -195,7 +195,7 @@ def return_labels(directoryList, added_limit, patch_size=32):
                 count, actually_added = 0, 0
                 
                 #Here we want to get 31 images for our feature vector and then break out of the loop
-                while actually_added < added_limit and count < count_limit:
+                while actually_added < added_limit and count < count_limit and count<len(corners):
                     corner = corners[count][0]
                     
                     if patch_size/2 <= corner[1] <= h-patch_size/2 and patch_size/2 <= corner[0] <= w-patch_size/2:
@@ -204,8 +204,8 @@ def return_labels(directoryList, added_limit, patch_size=32):
                         image_sift_features = np.append(image_sift_features, sift)
                         actually_added += 1
                     count += 1
-
-                sift_pictures = np.append(sift_pictures, [image_sift_features], axis=0)
+                if len(image_sift_features)==added_limit*128:
+                    sift_pictures = np.append(sift_pictures, [image_sift_features], axis=0)
 
     return sift_pictures[1:]
 
