@@ -9,6 +9,9 @@ from image_class.srv import *
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
+import matplotlib.pyplot as plt
+
+import gp
 
 i = 0
 image_taken = False
@@ -23,8 +26,17 @@ def classify_image_client(msg):
         split_data = [data[i:i+entry_length] for i in range(0, len(data), entry_length)]
         print(split_data)
         # we can publish to whatever channel is necessary at this point
+        for datum in split_data:
+            xy = datum[0:2]
+            classes = np.array(datum[3:])
+            print(classes)
+            print(xy)
+            gp.new_image(classes,*xy)
         global image_taken
         image_taken = True
+        # cm = plt.imshow(gp.get_image_map()[:,:,0],vmin=0,vmax=1)
+        # plt.colorbar(cm)
+        # plt.show("hold")
         return split_data
 
     except rospy.ServiceException, e:
@@ -37,7 +49,7 @@ def usage():
 global sub
 
 if __name__ == "__main__":
-
+    gp.setup()
     print "Requesting image"
     rospy.init_node('image_listener')
     image_topic = "/raspicam_node/image/compressed"
