@@ -1,175 +1,27 @@
 import numpy as np
 import cv2
 import os
-import math
-import time
-
-class SIFTDescriptor(object):
-    """Class for computing SIFT descriptor of the square patch
-
-    Attributes:
-        patchSize: size of the patch in pixels
-        maxBinValue: maximum descriptor element after L2 normalization. All above are clipped to this value
-        numOrientationBins: number of orientation bins for histogram
-        numSpatialBins: number of spatial bins. The final descriptor size is numSpatialBins x numSpatialBins x numOrientationBins
-    """
-    def precomputebins(self):
-        halfSize = int(self.patchSize/2)
-        ps = self.patchSize
-        sb = self.spatialBins;
-        step = float(self.spatialBins + 1) / (2 * halfSize)
-        precomp_bins = np.zeros(2*ps, dtype = np.int32)
-        precomp_weights = np.zeros(2*ps, dtype = np.float)
-        precomp_bin_weights_by_bx_py_px_mapping = np.zeros((sb,sb,ps,ps), dtype = np.float)
-        for i in range(ps):
-            i1 = i + ps
-            x = step * i
-            xi = int(x)
-            # bin indices
-            precomp_bins[i] = xi -1;
-            precomp_bins[i1] = xi
-            #bin weights
-            precomp_weights[i1] = x - xi;
-            precomp_weights[i] = 1.0 - precomp_weights[i1];
-            #truncate
-            if  (precomp_bins[i] < 0):
-                precomp_bins[i] = 0;
-                precomp_weights[i] = 0
-            if  (precomp_bins[i] >= self.spatialBins):
-                precomp_bins[i] = self.spatialBins - 1;
-                precomp_weights[i] = 0
-            if  (precomp_bins[i1] < 0):
-                precomp_bins[i1] = 0;
-                precomp_weights[i1] = 0
-            if  (precomp_bins[i1] >= self.spatialBins):
-                precomp_bins[i1] = self.spatialBins - 1;
-                precomp_weights[i1] = 0
-        for y in range(ps):
-            for x in range(ps):
-                precomp_bin_weights_by_bx_py_px_mapping[precomp_bins[y], precomp_bins[x], y, x ] += precomp_weights[y]*precomp_weights[x]
-                precomp_bin_weights_by_bx_py_px_mapping[precomp_bins[y+ps], precomp_bins[x], y, x ] += precomp_weights[y+ps]*precomp_weights[x]
-                precomp_bin_weights_by_bx_py_px_mapping[precomp_bins[y], precomp_bins[x+ps], y, x ] += precomp_weights[y]*precomp_weights[x+ps]
-                precomp_bin_weights_by_bx_py_px_mapping[precomp_bins[y+ps], precomp_bins[x+ps], y, x ] += precomp_weights[y+ps]*precomp_weights[x+ps]
-        mask =  self.CircularGaussKernel(kernlen=self.patchSize)
-        for y in range(sb):
-            for x in range(sb):
-                precomp_bin_weights_by_bx_py_px_mapping[y,x,:,:] *= mask
-                precomp_bin_weights_by_bx_py_px_mapping[y,x,:,:] = np.maximum(0,precomp_bin_weights_by_bx_py_px_mapping[y,x,:,:])
-        return precomp_bins.astype(np.int32),precomp_weights,precomp_bin_weights_by_bx_py_px_mapping,mask
-    def __init__(self, patchSize = 41, maxBinValue = 0.2, numOrientationBins = 8, numSpatialBins = 4):
-        self.patchSize = patchSize
-        self.maxBinValue = maxBinValue
-        self.orientationBins = numOrientationBins
-        self.spatialBins = numSpatialBins
-        self.precomp_bins,self.precomp_weights,self.mapping,self.mask = self.precomputebins()
-        self.binaryMask = self.mask > 0
-        self.gx = np.zeros((patchSize,patchSize), dtype=np.float)
-        self.gy = np.zeros((patchSize,patchSize), dtype=np.float)
-        self.ori = np.zeros((patchSize,patchSize), dtype=np.float)
-        self.mag = np.zeros((patchSize,patchSize), dtype=np.float)
-        self.norm_patch = np.zeros((patchSize,patchSize), dtype=np.float)
-        ps = self.patchSize
-        sb = self.spatialBins
-        ob = self.orientationBins
-        self.desc = np.zeros((ob, sb , sb ), dtype = np.float)
-        return
-    def CircularGaussKernel(self, kernlen=21):
-        halfSize = kernlen / 2;
-        r2 = halfSize*halfSize;
-        sigma2 = 0.9 * r2;
-        disq = 0;
-        kernel = np.zeros((kernlen,kernlen))
-        for y in range(kernlen):
-            for x in range(kernlen):
-                disq = (y - halfSize)*(y - halfSize) +  (x - halfSize)*(x - halfSize);
-                if disq < r2:
-                    kernel[y,x] = math.exp(-disq / sigma2)
-                else:
-                    kernel[y,x] = 0
-        return kernel
-    def photonorm(self, patch, binaryMask = None):
-        if binaryMask is not None:
-            std1_coef = 50. /  np.std(patch[binaryMask])
-            mean1 =  np.mean(patch[binaryMask])
-        else:
-            std1_coef = 50. / np.std(patch)
-            mean1 =  np.mean(patch)
-        if std1_coef >= 50. / 0.000001:
-            std1_coef = 50.0
-        self.norm_patch = 128. + std1_coef * (patch - mean1);
-        self.norm_patch = np.clip(self.norm_patch, 0.,255.);
-        return
-    def getDerivatives(self,image):
-        #[-1 1] kernel for borders
-        self.gx[:,0] = image[:,1] - image[:,0]
-        self.gy[0,:] = image[1,:] - image[0,:]
-        self.gx[:,-1] = image[:,-1] - image[:,-2]
-        self.gy[-1,:] = image[-1,:] - image[-2,:]
-        #[-1 0 1] kernel for the rest
-        self.gy[1:-2,:] = image[2:-1,:] - image[0:-3,:]
-        self.gx[:,1:-2] = image[:,2:-1] - image[:,0:-3]
-        self.gx *= 0.5
-        self.gy *= 0.5
-        return
-    def samplePatch(self,grad,ori):
-        ps = self.patchSize
-        sb = self.spatialBins
-        ob = self.orientationBins
-        o_big = float(ob) * (ori + 2.0*math.pi) / (2.0 * math.pi)
-        bo0_big = np.floor(o_big)#.astype(np.int32)
-        wo1_big = o_big - bo0_big;
-        bo0_big = bo0_big % ob;
-        bo1_big = (bo0_big + 1.0) % ob;
-        wo0_big = 1.0 - wo1_big;
-        wo0_big *= grad;
-        wo0_big = np.maximum(0, wo0_big)
-        wo1_big *= grad;
-        wo1_big = np.maximum(0, wo1_big)
-        ori_weight_map = np.zeros((ob,ps,ps))
-        for o in range(ob):
-            relevant0 = np.where(bo0_big == o)
-            ori_weight_map[o, relevant0[0], relevant0[1]] = wo0_big[relevant0[0], relevant0[1]]
-            relevant1 = np.where(bo1_big == o)
-            ori_weight_map[o, relevant1[0], relevant1[1]] += wo1_big[relevant1[0], relevant1[1]]
-        for y in range(sb):
-            for x in range(sb):
-                self.desc[:,y,x] =  np.tensordot( ori_weight_map, self.mapping[y,x,:,:])
-        return
-    def describe(self,patch, userootsift = False, flatten = True, show_timings = False):
-        t = time.time()
-        self.photonorm(patch, binaryMask = self.binaryMask);
-        if show_timings:
-            print('photonorm time = ', time.time() - t)
-            t = time.time()
-        self.getDerivatives(self.norm_patch)
-        if show_timings:
-            print('gradients time = ', time.time() - t)
-            t = time.time()
-        self.mag = np.sqrt(self.gx * self.gx + self.gy*self.gy)
-        self.ori = np.arctan2(self.gy,self.gx)
-        if show_timings:
-            print('mag + ori time = ', time.time() - t)
-            t = time.time()
-        self.samplePatch(self.mag,self.ori)
-        if show_timings:
-            print('sample patch time = ', time.time() - t)
-            t = time.time()
-        self.desc /= np.linalg.norm(self.desc.flatten(),2)
-        self.desc = np.clip(self.desc, 0,self.maxBinValue);
-        self.desc /= np.linalg.norm(self.desc.flatten(),2)
-        if userootsift:
-            self.desc = np.sqrt(self.desc / np.linalg.norm(unnorm_desc.flatten(),1))
-        if show_timings:
-            print('clip and norm time = ', time.time() - t)
-            t = time.time()
-        if flatten:
-            return np.clip(512. * self.desc.flatten() , 0, 255).astype(np.int32);
-        else:
-            return np.clip(512. * self.desc , 0, 255).astype(np.int32);
+from SIFTDescriptor import SIFTDescriptor
+from scipy.ndimage import filters
 
 
-def return_labels(directoryList, added_limit, patch_size=32):
-    range_size = added_limit*128
+'''
+    return the image descriptor for all images in a set of directories
+    params:
+        directoryList: list of directories to be skimmed
+        added_limit: how many features are picked out of each image
+        hue_multi: how many times the patch hue is added to the patch descriptor
+        sat_multi: how many times the patch saturation is added to the patch descriptor
+        random_samples: how many random patches are included as features
+        include_salient: whether the most salient patch is included as a feature
+        patch_size: size of feature to be described
+    returns:
+        a 2d array where each row is an image, and each image is a concanteation of all features
+        for each image, there are added_limit+random_samples+include_salient features, and each feature is given a descriptor of length (128+hue_multi+sat_multi)
+'''
+def return_labels(directoryList, added_limit, hue_multi=0, sat_multi=0, random_samples=0, include_salient=False, patch_size=32):
+    nFeatures = added_limit+random_samples+include_salient
+    range_size = nFeatures*(128+hue_multi+sat_multi)
     count_limit = 100
     print(added_limit)
     print("range: " , range_size)
@@ -184,56 +36,103 @@ def return_labels(directoryList, added_limit, patch_size=32):
             name = "training/"+directory + '/' + filename
             if name[-3:] == 'png' or name[-3:] == 'jpg':
                 image = cv2.imread(name)
-                
-                #transform it to black and white and get features
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                h, w = gray.shape
-                corners = cv2.goodFeaturesToTrack(gray,count_limit,0.01,10)
-
-                corners = np.int0(corners)
-                image_sift_features = np.asarray([]) 
-                count, actually_added = 0, 0
-                
-                #Here we want to get 31 images for our feature vector and then break out of the loop
-                while actually_added < added_limit and count < count_limit and count<len(corners):
-                    corner = corners[count][0]
-                    
-                    if patch_size/2 <= corner[1] <= h-patch_size/2 and patch_size/2 <= corner[0] <= w-patch_size/2:
-                        patch = gray[corner[1]-int(patch_size/2):corner[1]+int(patch_size/2), corner[0]-int(patch_size/2):corner[0]+int(patch_size/2)]
-                        sift = SD.describe(patch)
-                        image_sift_features = np.append(image_sift_features, sift)
-                        actually_added += 1
-                    count += 1
-                if len(image_sift_features)==added_limit*128:
+                image_sift_features = get_image_descriptor(image, added_limit, hue_multi, sat_multi, random_samples, include_salient, patch_size)
+                if len(image_sift_features)==range_size:
                     sift_pictures = np.append(sift_pictures, [image_sift_features], axis=0)
 
     return sift_pictures[1:]
 
-def get_image_descriptor(image, added_limit=12, patch_size=32):
-    range_size = added_limit*128
-    count_limit = 100
+'''  return the average hue of a patch  '''
+def getHue(colorPatch):
+    hsv = cv2.cvtColor(colorPatch, cv2.COLOR_BGR2HSV)
+    return np.mean(hsv[:,:,0])
+
+'''  return the average hue of a patch  '''
+def getSat(colorPatch):
+    hsv = cv2.cvtColor(colorPatch, cv2.COLOR_BGR2HSV)
+    return np.mean(hsv[:,:,1])
+
+
+'''
+    return the image descriptor for a single image
+    params:
+        image: BGR image
+        added_limit: how many features are picked out of each image
+        hue_multi: how many times the patch hue is added to the patch descriptor
+        sat_multi: how many times the patch saturation is added to the patch descriptor
+        random_samples: how many random patches are included as features
+        include_salient: whether the most salient patch is included as a feature
+        patch_size: size of feature to be described
+    returns:
+        a concanteation of all feature descriptions for a single image
+        for each image, there are added_limit+random_samples+include_salient features, and each feature is given a descriptor of length (128+hue_multi+sat_multi)
+'''
+def get_image_descriptor(image, added_limit, hue_multi=0, sat_multi=0, random_samples=0, include_salient=False, patch_size=32):
+    nFeatures = added_limit+random_samples+include_salient
+    range_size = (nFeatures)*(128+hue_multi+sat_multi) #total length of image descriptor = # features * len(feature description)
+    count_limit = 50
     SD = SIFTDescriptor(patchSize = patch_size)
        
     #transform it to black and white and get features
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
     corners = cv2.goodFeaturesToTrack(gray,count_limit,0.01,10)
-
-    corners = np.int0(corners)
+ 
+    features = getRandomSamples(random_samples, image, patch_size)
+    if include_salient:
+        features = np.concatenate((getSalientPoint(gray, patch_size), features))
+    features = np.concatenate((features, corners))
+    features = np.int0(features)
+    
     image_sift_features = np.asarray([]) 
     count, actually_added = 0, 0
         
-    #Here we want to get 31 images for our feature vector and then break out of the loop
-    while actually_added < added_limit and count < count_limit and count<len(corners):
-        corner = corners[count][0]
+    #Here we want to get added_limit images for our feature vector and then break out of the loop
+    while actually_added < nFeatures and count < count_limit and count<len(features):
+        feature = features[count][0]
         
-        if patch_size/2 <= corner[1] <= h-patch_size/2 and patch_size/2 <= corner[0] <= w-patch_size/2:
-            patch = gray[corner[1]-int(patch_size/2):corner[1]+int(patch_size/2), corner[0]-int(patch_size/2):corner[0]+int(patch_size/2)]
+        if patch_size/2 <= feature[1] <= h-patch_size/2 and patch_size/2 <= feature[0] <= w-patch_size/2:
+            patch = gray[feature[1]-int(patch_size/2):feature[1]+int(patch_size/2), feature[0]-int(patch_size/2):feature[0]+int(patch_size/2)]
+            colorPatch = image[feature[1]-int(patch_size/2):feature[1]+int(patch_size/2), feature[0]-int(patch_size/2):feature[0]+int(patch_size/2)]
+            hue = getHue(colorPatch)
+            sat = getSat(colorPatch)
             sift = SD.describe(patch)
+            sift = np.append(sift, np.array([hue]*hue_multi+[sat]*sat_multi))
             image_sift_features = np.append(image_sift_features, sift)
             actually_added += 1
         count += 1
     return image_sift_features
 
+def getRandomSamples(n, image, patch_size):
+    h,w,_ = image.shape
+    minx = patch_size/2
+    maxx = w - patch_size/2
+    miny = patch_size/2
+    maxy = h - patch_size/2
+    samples = np.zeros((n,1,2))
+    np.random.seed(0)
+    for i in range(n):
+        x = np.random.randint(minx,maxx)
+        y = np.random.randint(miny,maxy)
+        samples[i] = [x,y]
 
+    return samples
 
+def getSalientPoint(gray, patch_size):
+    hist = np.histogram(gray, 256, (0,255))[0]
+    hist = hist/float(sum(hist))
+    logp = np.log2(hist, where=(hist>0))
+    toLogP = lambda x: -logp[x]
+    toLogP = np.vectorize(toLogP)
+    bitSal = toLogP(gray)
+    patch = np.ones((patch_size,patch_size))
+    patchSal = filters.convolve(bitSal, patch)
+    sp = np.zeros((1,1,2))
+    sp[0] = np.array(np.unravel_index(np.argmax(patchSal, axis=None), patchSal.shape))
+    return sp
+    
+
+    
+
+    
+    
